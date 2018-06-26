@@ -15,6 +15,7 @@ const ora = require('ora')
 const webpack = require('webpack')
 const getEntry = require('../libs/entry')
 const ftpUpload = require('../libs/ftp')
+const template = require('../libs/template')
 const config = require('../config')
 const paths = config.paths
 const getWebpackConfig = require('../webpack/webpack.prod.conf')
@@ -164,6 +165,20 @@ function ftp({ entry, ftpBranch }) {
   }))
 }
 
+function template({ entry, ftpBranch }) {
+  if (ftpBranch === null)
+    return {
+      entry,
+      ftpBranch
+    }
+
+  return ftpUpload(entry, ftpBranch).then(remotePath => ({
+    entry,
+    ftpBranch,
+    remotePath
+  }))
+}
+
 function setup(entryInput) {
   spinner.start()
 
@@ -177,6 +192,7 @@ module.exports = args => {
     .then(build)
     .then(success)
     .then(ftp)
+    .then(template)
     .then(hybrid)
     .catch(error)
 }
