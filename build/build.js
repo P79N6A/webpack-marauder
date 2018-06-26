@@ -15,7 +15,7 @@ const ora = require('ora')
 const webpack = require('webpack')
 const getEntry = require('../libs/entry')
 const ftpUpload = require('../libs/ftp')
-const template = require('../libs/template')
+const changeTemplate = require('../libs/changeTemplate')
 const config = require('../config')
 const paths = config.paths
 const getWebpackConfig = require('../webpack/webpack.prod.conf')
@@ -172,7 +172,7 @@ function template({ entry, ftpBranch }) {
       ftpBranch
     }
 
-  return ftpUpload(entry, ftpBranch).then(remotePath => ({
+  return changeTemplate(entry, ftpBranch).then(remotePath => ({
     entry,
     ftpBranch,
     remotePath
