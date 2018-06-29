@@ -22,6 +22,4 @@ client.queryAsync = sql => {
   })
 }
 
-client.connect()
-
 module.exports = client

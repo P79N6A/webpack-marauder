@@ -6,6 +6,7 @@ const { ensureSlash, camelName } = require('../libs/utils')
 const defConf = require('./default')
 const maraConf = require(paths.marauder)
 const pkgName = require(paths.packageJson).name
+const author = require(paths.packageJson).author
 const maraVersion = require(paths.ownPackageJson).version
 
 function getServedPath(publicUrl) {
@@ -71,5 +72,7 @@ module.exports = {
   ftp: Object.assign({}, defConf.ftp, maraConf.ftp),
   // hybrid 项目配置，存在此属性时，将会生成 zip 包
   hybrid: defConf.hybrid,
-  postcss: defConf.postcss
+  postcss: defConf.postcss,
+  template: maraConf.template,
+  author
 }
