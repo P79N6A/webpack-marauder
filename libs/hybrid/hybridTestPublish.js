@@ -10,22 +10,30 @@ const fetch = axios.create({
   baseURL: `${GITLAB_HOST}/api/v4/`
 })
 
-const DEBUG = true
+// 内部调试用
+// 当为 true 时，发布到 ci dev 环境
+// marauder 发布时，请确保关闭
+const DEBUG = false
 
-function replayAsync(fn, assertFn, loop = 10, time = 500) {
-  let playNum = 0
+function replayAsync(fn, assertFn, maxLoop = 10, wait = 1000) {
+  return (...args) => {
+    let cycles = 0
 
-  const delay = (cb, args) =>
-    new Promise(resolve => {
-      setTimeout(() => resolve(cb.apply(cb, args)), time)
+    return new Promise(async function tillTheWorldEnds(resolve, reject) {
+      let res = null
+      let isEndTime = false
+
+      try {
+        res = await fn.apply(fn, args)
+        isEndTime = assertFn(res) || ++cycles > maxLoop
+      } catch (e) {
+        return reject(e)
+      }
+
+      return isEndTime
+        ? resolve(res)
+        : setTimeout(tillTheWorldEnds, wait, resolve)
     })
-
-  return async function play(...args) {
-    const res = await fn.apply(fn, args)
-
-    if (assertFn(res) || ++playNum > loop) return res
-
-    return delay(play, args)
   }
 }
 
@@ -38,31 +46,51 @@ async function doCIJob(repoName, tagName) {
     // job 创建需要时间，因此循环请求
     job = await replayAsync(getTestJob, data => data)(pid, tagName)
   } catch (e) {
-    spinner.fail('Searching job\n')
+    // fetch error
+    if (e.response) {
+      spinner.fail('Searching job: ' + e.response.data.error + '\n')
+      console.log(chalk.red(e.response.data.error_description), '\n')
+    } else {
+      spinner.fail('Searching job\n')
+      console.log(chalk.red(e), '\n')
+    }
+
     throw new Error(e)
   }
 
   if (!job) {
-    spinner.fail('未匹配 CI 任务，请检查 gitlab-ci.yml')
+    spinner.fail('未匹配到 CI 任务，请更新 gitlab-ci.yml\n')
+
+    console.log(
+      chalk.yellow(
+        'https://raw.githubusercontent.com/SinaMFE/marauder-template/master/.gitlab-ci.yml'
+      ),
+      '\n'
+    )
+
     throw new Error()
   }
 
   spinner.text = `Running job #${job.id}...`
 
   try {
-    // job 创建需要时间，因此循环请求
-    const mGetJobInfo = replayAsync(
-      getJobInfo,
-      data => data.status != 'created',
-      10,
-      1500
-    )
-    job = await mGetJobInfo(pid, job.id)
+    const assertReady = data => data.status != 'created'
+
+    // job 就绪需要时间，因此循环请求
+    job = await replayAsync(getJobInfo, assertReady, 10, 1500)(pid, job.id)
 
     // return job
     return await playJob(pid, job.id, spinner)
   } catch (e) {
-    spinner.fail()
+    // fetch error
+    if (e.response) {
+      spinner.fail('Running job: ' + e.response.data.error + '\n')
+      console.log(chalk.red(e.response.data.error_description), '\n')
+    } else {
+      spinner.fail('Running job\n')
+      console.log(chalk.red(e), '\n')
+    }
+
     throw new Error(e)
   }
 }
@@ -206,7 +234,7 @@ async function showManualTip(repoUrl, type = 'token') {
     console.log('Private Token 生成链接：')
     console.log(chalk.yellow(`${GITLAB_HOST}/profile/personal_access_tokens`))
   } else if (type == 'ci') {
-    console.log(chalk.red('网络异常，请手动发布:'))
+    console.log(chalk.red('任务失败，请手动发布:'))
     console.log(commitPage, '\n')
   }
 }
@@ -265,7 +293,7 @@ module.exports = async function hybridTestPublish(entry, testMsg) {
   } catch (e) {
     const { stdout: lastCommit } = await execa('git', ['rev-parse', 'HEAD'])
 
-    console.log(e)
+    DEBUG && console.log(e)
     await showManualTip(repoUrl, 'ci')
   }
 }
